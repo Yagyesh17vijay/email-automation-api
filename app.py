@@ -1,5 +1,6 @@
-from dotenv import load_dotenv
-load_dotenv()
+from dotenv import dotenv_values
+print(dotenv_values(".env"))
+
 from flask import Flask, request, jsonify
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -7,15 +8,18 @@ from email.mime.text import MIMEText
 
 app = Flask(__name__)
 import os
-SENDER_EMAIL = os.getenv("EMAIL")
+SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 
-def send_email(receiver_email, message):
+print("email =", SENDER_EMAIL)
+print("password =", APP_PASSWORD)
+
+def send_email(receiver_email, message, subject):
     try:
         msg = MIMEMultipart()
         msg['From'] = SENDER_EMAIL
         msg['To'] = receiver_email
-        msg['Subject'] = "Automated Message"
+        msg['Subject'] = subject
 
         msg.attach(MIMEText(message, 'plain'))
 
@@ -42,13 +46,14 @@ def send_email_api():
     try:
         data = request.json
 
-        receiver = data.get("email")
+        receiver_email = data.get("email")
         message = data.get("message")
+        subject= data.get("subject")
 
-        if not receiver or not message:
+        if not receiver_email or not message:
             return jsonify({"error": "Email and message required"}), 400
-
-        success, response = send_email(receiver, message)
+        
+        success, response = send_email(receiver_email, message, subject)
 
         if success:
             return jsonify({"status": response}), 200
