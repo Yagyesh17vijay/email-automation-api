@@ -1,19 +1,18 @@
 from dotenv import dotenv_values
-print(dotenv_values(".env"))
 
 from flask import Flask, request, jsonify
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-#from email import encoders
-#from email.mime.base import MIMEBase
+from email import encoders
+from email.mime.base import MIMEBase
+
 app = Flask(__name__)
 import os
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 
 print("email =", SENDER_EMAIL)
-print("password =", APP_PASSWORD)
 
 def send_email(receiver_email, message, subject=None, attachment=None):
     try:
@@ -23,6 +22,19 @@ def send_email(receiver_email, message, subject=None, attachment=None):
         msg['Subject'] = subject
 
         msg.attach(MIMEText(message, 'plain'))
+
+        if attachment:
+            part = MIMEBase('application', 'octet-stream')
+            part.set_payload(attachment.read())
+
+            encoders.encode_base64(part)
+
+            part.add_header(
+                'Content-Disposition',
+                f'attachment; filename="{attachment.filename}"'
+            )
+
+            msg.attach(part)
 
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
