@@ -5,7 +5,8 @@ from flask import Flask, request, jsonify
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-
+#from email import encoders
+#from email.mime.base import MIMEBase
 app = Flask(__name__)
 import os
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
@@ -14,7 +15,7 @@ APP_PASSWORD = os.getenv("APP_PASSWORD")
 print("email =", SENDER_EMAIL)
 print("password =", APP_PASSWORD)
 
-def send_email(receiver_email, message, subject):
+def send_email(receiver_email, message, subject=None, attachment=None):
     try:
         msg = MIMEMultipart()
         msg['From'] = SENDER_EMAIL
@@ -44,16 +45,16 @@ def home():
 @app.route('/send-email', methods=['POST'])
 def send_email_api():
     try:
-        data = request.json
 
-        receiver_email = data.get("email")
-        message = data.get("message")
-        subject= data.get("subject")
+        receiver_email = request.form.get("email")
+        message = request.form.get("message")
+        subject= request.form.get("subject")
+        attachment= request.files.get("attachment")
 
         if not receiver_email or not message:
             return jsonify({"error": "Email and message required"}), 400
         
-        success, response = send_email(receiver_email, message, subject)
+        success, response = send_email(receiver_email, message, subject, attachment)
 
         if success:
             return jsonify({"status": response}), 200
