@@ -10,6 +10,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email import encoders
 from email.mime.base import MIMEBase
+from email_history import save_email_activity
+from history_api import history_bp
 
 load_dotenv()
 
@@ -26,6 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+app.register_blueprint(history_bp)
 app.config["MAX_CONTENT_LENGTH"] = 6 * 1024 * 1024
 
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
@@ -37,44 +40,68 @@ if not SENDER_EMAIL or not APP_PASSWORD:
     )
 
 def send_email(receiver_email, message, subject=None, attachments=None, email_type="plain"):
+    msg = MIMEMultipart()
+    msg['From'] = SENDER_EMAIL
+    msg['To'] = receiver_email
+    msg['Subject'] = subject or ""
+
+    email_type = email_type.lower()
+    msg.attach(MIMEText(message, email_type))
+
+    if attachments:
+        for attachment in attachments:
+            if not attachment or not attachment.filename:
+                continue
+
+            part = MIMEBase('application', 'octet-stream')
+            part.set_payload(attachment.read())
+            encoders.encode_base64(part)
+
+            part.add_header(
+                'Content-Disposition',
+                f'attachment; filename="{attachment.filename}"'
+            )
+            msg.attach(part)
+
     try:
-        msg = MIMEMultipart()
-        msg['From'] = SENDER_EMAIL
-        msg['To'] = receiver_email
-        msg['Subject'] = subject
-
-        email_type = email_type.lower()
-        msg.attach(MIMEText(message, email_type))
-
-        if attachments:
-            for attachment in attachments:
-                if not attachment or not attachment.filename:
-                    continue
-
-                part = MIMEBase('application', 'octet-stream')
-                part.set_payload(attachment.read())
-
-                encoders.encode_base64(part)
-
-                part.add_header(
-                    'Content-Disposition',
-                    f'attachment; filename="{attachment.filename}"'
-                )
-
-                msg.attach(part)
-
         with smtplib.SMTP('smtp.gmail.com', 587) as server:
             server.starttls()
             server.login(SENDER_EMAIL, APP_PASSWORD)
             server.send_message(msg)
-            logger.info("Email sent successfully")
 
-        return True, "Email sent successfully"
-
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to send email")
+
+        try:
+            save_email_activity(
+                recipient=receiver_email,
+                subject=subject or "",
+                message=message,
+                status="FAILED",
+                error_message=str(e)
+            )
+        except Exception:
+            logger.exception("Failed to save email failure record")
+
         return False, "Failed to send email. Please check the email configuration and try again."
 
+    logger.info("Email sent successfully")
+
+    try:
+        save_email_activity(
+            recipient=receiver_email,
+            subject=subject or "",
+            message=message,
+            status="SENT"
+        )
+    except Exception:
+        logger.exception(
+            "Email was sent, but saving its database record failed"
+        )
+
+    return True, "Email sent successfully"
+
+    
 @app.route('/')
 def home():
     return "Email Automation API Running"
@@ -137,3 +164,4 @@ def send_email_api():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
